@@ -63,4 +63,3 @@ class TEMPLATE_OT_hello_world_operator(Operator):
 
         print("Hello World")
         return {"FINISHED"}
-gdfgdf
