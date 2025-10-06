@@ -32,6 +32,7 @@ else:
     # ...and here
     from . import addon_preferences
     from . import hello_world_module
+    from . import spawn_room_module
 
 # ...but not here
 import bpy
@@ -49,6 +50,8 @@ classes = [
     hello_world_module.HelloWorldProperties,
     hello_world_module.TEMPLATE_PT_hello_world_panel,
     hello_world_module.TEMPLATE_OT_hello_world_operator,
+    spawn_room_module.Mio,
+    
 ]
 
 
