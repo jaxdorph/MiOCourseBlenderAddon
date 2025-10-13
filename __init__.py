@@ -1,5 +1,5 @@
 bl_info = {
-    "name": "Template Add-on Name",
+    "name": "MiOCourseBlenderAddon",
     "description": "Template add-on description.",
     "author": "Your Name",
     "version": (1, 0, 0),
@@ -33,6 +33,8 @@ else:
     from . import addon_preferences
     from . import hello_world_module
     from . import spawn_room_module
+    from . import dev_tools
+
 
 # ...but not here
 import bpy
@@ -51,6 +53,8 @@ classes = [
     hello_world_module.TEMPLATE_PT_hello_world_panel,
     hello_world_module.TEMPLATE_OT_hello_world_operator,
     spawn_room_module.Mio,
+    dev_tools.MIO_OT_reload_addon,
+
     
 ]
 
