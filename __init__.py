@@ -28,6 +28,8 @@ if "bpy" in locals():
     # Modules to reload during development go here
     reload(addon_preferences)
     reload(hello_world_module)
+    reload(spawn_room_module)
+    reload(dev_tools)
 else:
     # ...and here
     from . import addon_preferences
@@ -52,25 +54,38 @@ classes = [
     hello_world_module.HelloWorldProperties,
     hello_world_module.TEMPLATE_PT_hello_world_panel,
     hello_world_module.TEMPLATE_OT_hello_world_operator,
-    spawn_room_module.Mio,
-    dev_tools.MIO_OT_reload_addon,
-
-    
+    spawn_room_module.MIOProperties,
+    spawn_room_module.MIO_OT_spawn_room,
+    spawn_room_module.MIO_PT_main,
 ]
 
 
+
 def register():
+
+
+    # Register classes
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    bpy.types.Scene.hello_world_properties = bpy.props.PointerProperty(type=hello_world_module.HelloWorldProperties)
+    # Register properties for both systems
+    bpy.types.Scene.hello_world_properties = bpy.props.PointerProperty(
+        type=hello_world_module.HelloWorldProperties
+    )
+    bpy.types.Scene.mio_props = bpy.props.PointerProperty(
+        type=spawn_room_module.MIOProperties
+    )
 
 
 def unregister():
+    # Remove properties
+    del bpy.types.Scene.hello_world_properties
+    del bpy.types.Scene.mio_props
+
+    # Unregister classes
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
-    del bpy.types.Scene.hello_world_properties
 
 
 if __name__ == "__main__":
