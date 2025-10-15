@@ -1,93 +1,48 @@
 import bpy
-import os
+from bpy.types import Operator
 
-# ——————————————————————————————————————————————————————————
-# MARK: FURNITURE SWITCHING MODULE
-# ——————————————————————————————————————————————————————————
-# Handles replacing selected furniture objects with another
-# model of the same type, loading models and materials from
-# the add-on’s asset library.
-# ——————————————————————————————————————————————————————————
-
-
-# ——————————————————————————————————————————————————————————
-# MARK: UTILITY FUNCTIONS
-# ——————————————————————————————————————————————————————————
-
-def get_asset_path():
-    """Return absolute path to the add-on's 'assets' folder."""
-    addon_dir = os.path.dirname(__file__)
-    return os.path.join(addon_dir, "assets")
-
-
-def load_furniture_asset(room_type, object_name):
-    """Load a furniture object from the add-on's asset library."""
-    blend_path = os.path.join(get_asset_path(), f"{room_type}.blend")
-
-    if not os.path.exists(blend_path):
-        print(f"[MiO] Missing asset file: {blend_path}")
-        return None
-
-    # Load the object from the .blend file
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if object_name in data_from.objects:
-            data_to.objects = [object_name]
-        else:
-            print(f"[MiO] Object '{object_name}' not found in {blend_path}")
-            return None
-
-    obj = data_to.objects[0]
-    bpy.context.collection.objects.link(obj)
+def load_furniture_asset(object_name):
+    """
+    Placeholder function to load furniture objects.
+    Replace this with actual logic to append/link .blend assets.
+    """
+    # For now, just create a cube as a dummy object
+    bpy.ops.mesh.primitive_cube_add(size=1)
+    obj = bpy.context.active_object
+    obj.name = object_name
     return obj
 
-
-# ——————————————————————————————————————————————————————————
-# MARK: FURNITURE SWITCH OPERATOR
-# ——————————————————————————————————————————————————————————
-
-class MIO_OT_switch_furniture(bpy.types.Operator):
-    """Replace selected furniture with another model of the same type."""
+class MIO_OT_switch_furniture(Operator):
+    """Switch the selected furniture object to a new model"""
     bl_idname = "mio.switch_furniture"
     bl_label = "Switch Selected Furniture"
-    bl_description = "Replace selected furniture with another model"
+    bl_options = {'REGISTER', 'UNDO'}
 
-    new_model: bpy.props.StringProperty(
-        name="New Model Name",
-        description="Name of the new furniture model to load"
-    )
+    # Property passed from the panel
+    new_model: bpy.props.StringProperty()
 
     def execute(self, context):
-        selected = context.active_object
+        selected = context.selected_objects
+
         if not selected:
-            self.report({'ERROR'}, "No furniture object selected.")
+            self.report({'WARNING'}, "No object selected")
             return {'CANCELLED'}
 
-        print(f"[MiO] Switching furniture: {selected.name}")
+        for obj in selected:
+            location = obj.location.copy()
+            rotation = obj.rotation_euler.copy()
+            scale = obj.scale.copy()
 
-        # Get the room type (could be inferred later)
-        room_type = "Kitchen"  # Placeholder — later detect from object metadata
-        new_name = self.new_model or "Table_Modern"
+            # Delete old object
+            bpy.data.objects.remove(obj, do_unlink=True)
 
-        # Load new asset
-        new_obj = load_furniture_asset(room_type, new_name)
-        if not new_obj:
-            self.report({'ERROR'}, f"Could not load {new_name}")
-            return {'CANCELLED'}
+            # Load new object
+            new_obj = load_furniture_asset(self.new_model)
 
-        # Replace old furniture
-        new_obj.location = selected.location
-        bpy.data.objects.remove(selected, do_unlink=True)
+            # Apply location, rotation, scale
+            new_obj.location = location
+            new_obj.rotation_euler = rotation
+            new_obj.scale = scale
 
-        self.report({'INFO'}, f"Switched to {new_name}")
+        self.report({'INFO'}, f"Switched {len(selected)} object(s) to {self.new_model}")
         return {'FINISHED'}
-
-
-# ——————————————————————————————————————————————————————————
-# MARK: REGISTRATION
-# ——————————————————————————————————————————————————————————
-
-def register():
-    bpy.utils.register_class(MIO_OT_switch_furniture)
-
-def unregister():
-    bpy.utils.unregister_class(MIO_OT_switch_furniture)
