@@ -17,14 +17,17 @@ bl_info = {
 
 import bpy
 
-# When reloading inside Blender’s text editor:
+# Development reload support
 if "bpy" in locals():
     from importlib import reload
+    from . import spawn_room_module
+    from . import furniture_switch_module
     reload(spawn_room_module)
     reload(furniture_switch_module)
 else:
     from . import spawn_room_module
     from . import furniture_switch_module
+
 
 
 # ——————————————————————————————————————————————————————————
