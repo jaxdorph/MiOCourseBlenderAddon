@@ -1,91 +1,64 @@
+import bpy
+
 bl_info = {
     "name": "MiOCourseBlenderAddon",
-    "description": "Template add-on description.",
+    "description": "Simple interior room designer addon with room and furniture spawning functionality.",
     "author": "Your Name",
     "version": (1, 0, 0),
     "blender": (4, 2, 0),
-    "location": "3D Viewport > N Panel > Hello World",
-    # "doc_url": "https://github.com/{username}/{repo-name}",
-    # "tracker_url": "https://github.com/{username}/{repo-name}/issues",
-    # "warning": "Pre-Release",
+    "location": "3D Viewport > N Panel > MiO",
     "support": "COMMUNITY",
-    "category": "Choose a category",  # Try to fit into an existing category (or use your department's name)
+    "category": "3D View",
 }
 
-"""
-Make sure to update package.bat with the path to your Blender executable
-"""
-
-# ——————————————————————————————————————————————————————————————————————
+# ——————————————————————————————————————————————————————————
 # MARK: IMPORTS
-# ——————————————————————————————————————————————————————————————————————
+# ——————————————————————————————————————————————————————————
 
+import bpy
 
-# fmt: off
+# When reloading inside Blender’s text editor:
 if "bpy" in locals():
     from importlib import reload
-
-    # Modules to reload during development go here
-    reload(addon_preferences)
-    reload(hello_world_module)
     reload(spawn_room_module)
-    reload(dev_tools)
+    reload(furniture_switch_module)
 else:
-    # ...and here
-    from . import addon_preferences
-    from . import hello_world_module
     from . import spawn_room_module
-    from . import dev_tools
+    from . import furniture_switch_module
 
 
-# ...but not here
-import bpy
-# fmt: on
+# ——————————————————————————————————————————————————————————
+# MARK: CLASS REGISTRATION
+# ——————————————————————————————————————————————————————————
 
-
-# ——————————————————————————————————————————————————————————————————————
-# MARK: REGISTRATION
-# ——————————————————————————————————————————————————————————————————————
-
-
-# Classes Blender should know about go in this list
+# All classes Blender should know about go here
 classes = [
-    addon_preferences.TemplatePreferences,
-    hello_world_module.HelloWorldProperties,
-    hello_world_module.TEMPLATE_PT_hello_world_panel,
-    hello_world_module.TEMPLATE_OT_hello_world_operator,
     spawn_room_module.MIOProperties,
     spawn_room_module.MIO_OT_spawn_room,
     spawn_room_module.MIO_PT_main,
+    furniture_switch_module.MIO_OT_switch_furniture,
 ]
 
 
+# ——————————————————————————————————————————————————————————
+# MARK: REGISTER / UNREGISTER
+# ——————————————————————————————————————————————————————————
 
 def register():
-
-
-    # Register classes
+    """Register all addon classes and properties."""
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    # Register properties for both systems
-    bpy.types.Scene.hello_world_properties = bpy.props.PointerProperty(
-        type=hello_world_module.HelloWorldProperties
-    )
-    bpy.types.Scene.mio_props = bpy.props.PointerProperty(
-        type=spawn_room_module.MIOProperties
-    )
+    # Property group registered here (required by assignment)
+    bpy.types.Scene.mio_props = bpy.props.PointerProperty(type=spawn_room_module.MIOProperties)
 
 
 def unregister():
-    # Remove properties
-    del bpy.types.Scene.hello_world_properties
-    del bpy.types.Scene.mio_props
-
-    # Unregister classes
+    """Unregister all addon classes and clean up properties."""
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
+    del bpy.types.Scene.mio_props
 
 
 if __name__ == "__main__":
