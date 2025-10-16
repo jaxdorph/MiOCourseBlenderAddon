@@ -1,6 +1,6 @@
-bl_info = {
+bl_info = { 
     "name": "MiOCourseBlenderAddon",
-    "description": "Simple interior room designer with furniture switching",
+    "description": "Simple interior room designer with modular furniture switching.",
     "author": "Your Name",
     "version": (1, 0, 0),
     "blender": (4, 2, 0),
@@ -9,9 +9,12 @@ bl_info = {
     "category": "3D View",
 }
 
+# ——————————————————————————————————————————————————————
+# IMPORTS
+# ——————————————————————————————————————————————————————
 import bpy
 
-# Reload modules for development
+# During development, allow reloading the submodules
 if "bpy" in locals():
     from importlib import reload
     from . import spawn_room_module
@@ -22,23 +25,38 @@ else:
     from . import spawn_room_module
     from . import furniture_switch_module
 
-# List of classes to register
+
+# ——————————————————————————————————————————————————————
+# REGISTRATION
+# ——————————————————————————————————————————————————————
+# List all operator, panel, and property classes here
 classes = [
-    spawn_room_module.MIOProperties,
-    spawn_room_module.MIO_OT_spawn_room,
-    spawn_room_module.MIO_PT_main,
-    furniture_switch_module.MIO_OT_switch_furniture,
+    spawn_room_module.MIOProperties,              # Property group for room settings
+    spawn_room_module.MIO_OT_spawn_room,          # Operator for spawning rooms
+    spawn_room_module.MIO_PT_main,                # Main MiO panel in N-panel
+    furniture_switch_module.MIO_OT_switch_furniture,  # Operator for furniture switching
 ]
 
+
 def register():
+    """Register all add-on classes and properties."""
     for cls in classes:
         bpy.utils.register_class(cls)
-    bpy.types.Scene.mio_props = bpy.props.PointerProperty(type=spawn_room_module.MIOProperties)
+
+    # Store MiO properties on the Scene
+    bpy.types.Scene.mio_props = bpy.props.PointerProperty(
+        type=spawn_room_module.MIOProperties
+    )
+
 
 def unregister():
+    """Unregister all add-on classes and remove properties."""
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
+
     del bpy.types.Scene.mio_props
 
+
+# Only run register() when executed directly (useful for dev reloads)
 if __name__ == "__main__":
     register()
