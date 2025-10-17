@@ -2,11 +2,11 @@ schema_version = "1.0.0"
 
 # Example of manifest file for a Blender extension
 # Change the values according to your extension
-id = "my_example_extension"
+id = "addonformio"
 version = "1.0.0"
-name = "My Example Extension"
-tagline = "This is another extension"
-maintainer = "Developer name <email@address.com>"
+name = "MiO Add-on"
+tagline = "An add-on inteded to help with interior design at MiO"
+maintainer = "Johan Axdorph <johan.axdorph@gmail.com>"
 # Supported types: "add-on", "theme"
 type = "add-on"
 

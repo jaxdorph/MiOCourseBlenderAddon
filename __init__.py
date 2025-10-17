@@ -1,62 +1,55 @@
-bl_info = { 
-    "name": "MiOCourseBlenderAddon",
-    "description": "Simple interior room designer with modular furniture switching.",
-    "author": "Your Name",
+bl_info = {
+    "name": "MiO Course Blender Addon",
+    "author": "Johan Axdorph",
     "version": (1, 0, 0),
-    "blender": (4, 2, 0),
-    "location": "3D Viewport > N Panel > MiO",
-    "support": "COMMUNITY",
+    "blender": (4, 5, 0),
+    "location": "View3D > N Panel > MiO",
+    "description": "Spawn rooms, switch furniture, and change wall/floor colors",
     "category": "3D View",
 }
 
-# ——————————————————————————————————————————————————————
-# IMPORTS
-# ——————————————————————————————————————————————————————
 import bpy
 
-# During development, allow reloading the submodules
-if "bpy" in locals():
-    from importlib import reload
-    from . import spawn_room_module
-    from . import furniture_switch_module
-    reload(spawn_room_module)
-    reload(furniture_switch_module)
-else:
-    from . import spawn_room_module
-    from . import furniture_switch_module
+# Import our modules
+from . import spawn_room_module
+from . import furniture_switch_module
 
+# Collect all classes to register
+classes = (
+    # Room classes
+    spawn_room_module.MIORoomProperties,
+    spawn_room_module.MIO_OT_spawn_room,
+    spawn_room_module.MIO_OT_scale_room,
+    spawn_room_module.MIO_OT_update_room_colors,
+    spawn_room_module.MIO_OT_reset_room,
+    spawn_room_module.MIO_PT_room_spawner,
 
-# ——————————————————————————————————————————————————————
-# REGISTRATION
-# ——————————————————————————————————————————————————————
-# List all operator, panel, and property classes here
-classes = [
-    spawn_room_module.MIOProperties,              # Property group for room settings
-    spawn_room_module.MIO_OT_spawn_room,          # Operator for spawning rooms
-    spawn_room_module.MIO_PT_main,                # Main MiO panel in N-panel
-    furniture_switch_module.MIO_OT_switch_furniture,  # Operator for furniture switching
-]
+    # Furniture classes
+    furniture_switch_module.MIOFurnitureProperties,
+    furniture_switch_module.MIO_OT_switch_furniture,
+    furniture_switch_module.MIO_PT_furniture_switcher,
+)
 
 
 def register():
-    """Register all add-on classes and properties."""
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    # Store MiO properties on the Scene
-    bpy.types.Scene.mio_props = bpy.props.PointerProperty(
-        type=spawn_room_module.MIOProperties
-    )
+    # Add scene properties
+    bpy.types.Scene.mio_room_props = bpy.props.PointerProperty(type=spawn_room_module.MIORoomProperties)
+    bpy.types.Scene.mio_furniture_props = bpy.props.PointerProperty(type=furniture_switch_module.MIOFurnitureProperties)
 
 
 def unregister():
-    """Unregister all add-on classes and remove properties."""
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
-    del bpy.types.Scene.mio_props
+    # Remove scene properties
+    if hasattr(bpy.types.Scene, "mio_room_props"):
+        del bpy.types.Scene.mio_room_props
+    if hasattr(bpy.types.Scene, "mio_furniture_props"):
+        del bpy.types.Scene.mio_furniture_props
 
 
-# Only run register() when executed directly (useful for dev reloads)
 if __name__ == "__main__":
     register()

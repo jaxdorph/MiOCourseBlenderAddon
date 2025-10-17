@@ -1,130 +1,285 @@
 import bpy
-from bpy.types import Panel, Operator, PropertyGroup
+from bpy.types import Operator, Panel, PropertyGroup
+from bpy.props import FloatProperty, FloatVectorProperty
 
-# -----------------------------
-# Properties
-# -----------------------------
-class MIOProperties(PropertyGroup):
-    """Holds addon settings for room type and furniture selection."""
-    room_type: bpy.props.EnumProperty(
-        name="Room Type",
-        description="Select which room to spawn",
-        items=[
-            ("KITCHEN", "Kitchen", ""),
-            ("LIVING", "Living Room", ""),
-            ("BEDROOM", "Bedroom", "")
-        ],
-        default="KITCHEN"
+# ============================================================
+# Room Properties
+# ============================================================
+class MIORoomProperties(PropertyGroup):
+    room_length: FloatProperty(
+        name="Room Length",
+        description="Length of the room (X axis)",
+        default=4.0,
+        min=1.0,
+        max=20.0,
+    )
+    room_width: FloatProperty(
+        name="Room Width",
+        description="Width of the room (Y axis)",
+        default=3.0,
+        min=1.0,
+        max=20.0,
+    )
+    room_height: FloatProperty(
+        name="Room Height",
+        description="Height of the room (Z axis)",
+        default=2.5,
+        min=1.0,
+        max=5.0,
     )
 
-    furniture_model: bpy.props.StringProperty(
-        name="Furniture Model",
-        description="Name of the furniture model to switch selected object to",
-        default="Table_Modern"
+    wall_color: FloatVectorProperty(
+        name="Wall Color",
+        subtype="COLOR",
+        size=4,
+        min=0.0,
+        max=1.0,
+        default=(0.8, 0.8, 0.8, 1.0),
+        description="Color of the walls",
     )
 
-# -----------------------------
-# Room Spawner Operator
-# -----------------------------
-class MIO_OT_spawn_room(bpy.types.Operator):
-    """Spawns a room of the selected type with basic furniture"""
+    floor_color: FloatVectorProperty(
+        name="Floor Color",
+        subtype="COLOR",
+        size=4,
+        min=0.0,
+        max=1.0,
+        default=(0.5, 0.4, 0.3, 1.0),
+        description="Color of the floor",
+    )
+
+
+# ============================================================
+# Spawn Room Operator
+# ============================================================
+class MIO_OT_spawn_room(Operator):
     bl_idname = "mio.spawn_room"
     bl_label = "Spawn Room"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_description = "Create a basic room with floor and four walls"
 
     def execute(self, context):
-        room_type = context.scene.mio_props.room_type
-        self.report({'INFO'}, f"Spawning a {room_type}...")
+        props = context.scene.mio_room_props
 
-        # Optional: deselect all
-        bpy.ops.object.select_all(action='DESELECT')
+        # Remove old room if any
+        old_room = bpy.data.objects.get("Room")
+        if old_room:
+            bpy.data.objects.remove(old_room, do_unlink=True)
+        for obj in bpy.data.objects:
+            if obj.name.startswith("MiO_"):
+                bpy.data.objects.remove(obj, do_unlink=True)
 
-        if room_type == "KITCHEN":
-            # Floor
-            bpy.ops.mesh.primitive_plane_add(size=5, location=(0, 0, 0))
-            floor = context.active_object
-            floor.name = "Kitchen_Floor"
+        length, width, height = props.room_length, props.room_width, props.room_height
+        wall_thickness = 0.1
 
-            # Table
-            bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.5))
-            table = context.active_object
-            table.name = "Kitchen_Table"
+        # Create floor
+        bpy.ops.mesh.primitive_plane_add(size=1)
+        floor = bpy.context.active_object
+        floor.name = "MiO_Floor"
+        floor.scale = (length / 2, width / 2, 1)
+        floor.location = (0, 0, 0)
 
-            # Chair
-            bpy.ops.mesh.primitive_cube_add(size=0.5, location=(1, 0, 0.25))
-            chair = context.active_object
-            chair.name = "Kitchen_Chair"
+        # Helper to create a wall
+        def create_wall(name, size_x, size_y, loc):
+            bpy.ops.mesh.primitive_cube_add(size=1, location=loc)
+            wall = bpy.context.active_object
+            wall.name = name
+            wall.scale = (size_x / 2, size_y / 2, height / 2)
+            return wall
 
-        elif room_type == "LIVING":
-            # Floor
-            bpy.ops.mesh.primitive_plane_add(size=5, location=(0, 0, 0))
-            floor = context.active_object
-            floor.name = "Living_Floor"
+        half_len = length / 2
+        half_wid = width / 2
 
-            # Sofa
-            bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 0.5))
-            sofa = context.active_object
-            sofa.name = "Living_Sofa"
+        # Base z-offset so walls sit flush on floor
+        z_offset = height / 2 - 0.6
 
-            # Coffee Table
-            bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 1, 0.25))
-            coffee_table = context.active_object
-            coffee_table.name = "Living_CoffeeTable"
+        # Create walls with requested offsets
+        back_wall = create_wall(
+            "MiO_Wall_Back", length, wall_thickness,
+            (0, -half_wid + wall_thickness / 2 - 0.7, z_offset)
+        )
+        front_wall = create_wall(
+            "MiO_Wall_Front", length, wall_thickness,
+            (0 + 0.95, half_wid - wall_thickness / 2 - 0.7, z_offset)
+        )
+        left_wall = create_wall(
+            "MiO_Wall_Left", wall_thickness, width,
+            (-half_len + wall_thickness / 2 + 0.95, 0, z_offset)
+        )
+        right_wall = create_wall(
+            "MiO_Wall_Right", wall_thickness, width,
+            (half_len - wall_thickness / 2, 0, z_offset)
+        )
 
-        elif room_type == "BEDROOM":
-            # Floor
-            bpy.ops.mesh.primitive_plane_add(size=5, location=(0, 0, 0))
-            floor = context.active_object
-            floor.name = "Bedroom_Floor"
+        # Assign materials
+        wall_mat = self._get_or_create_material("MiO_Wall_Mat", props.wall_color)
+        floor_mat = self._get_or_create_material("MiO_Floor_Mat", props.floor_color)
+        for wall in [back_wall, front_wall, left_wall, right_wall]:
+            self._assign_material(wall, wall_mat)
+        self._assign_material(floor, floor_mat)
 
-            # Bed
-            bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 0.5))
-            bed = context.active_object
-            bed.name = "Bedroom_Bed"
+        # Join into one object
+        objs = [floor, back_wall, front_wall, left_wall, right_wall]
+        bpy.context.view_layer.objects.active = floor
+        for o in objs:
+            o.select_set(True)
+        bpy.ops.object.join()
 
-            # Nightstand
-            bpy.ops.mesh.primitive_cube_add(size=0.5, location=(1.5, 0, 0.25))
-            nightstand = context.active_object
-            nightstand.name = "Bedroom_Nightstand"
+        joined = bpy.context.active_object
+        joined.name = "Room"
+        joined.location = (0, 0, 0)
 
+        self.report({'INFO'}, "Room created successfully.")
+        return {'FINISHED'}
+
+    def _get_or_create_material(self, name, color):
+        mat = bpy.data.materials.get(name)
+        if not mat:
+            mat = bpy.data.materials.new(name)
+            mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+        if bsdf:
+            bsdf.inputs["Base Color"].default_value = color
+        return mat
+
+    def _assign_material(self, obj, mat):
+        if obj.data.materials:
+            obj.data.materials[0] = mat
         else:
-            self.report({'WARNING'}, f"Unknown room type: {room_type}")
-            return {'CANCELLED'}
+            obj.data.materials.append(mat)
 
+
+# ============================================================
+# Scale Room Operator
+# ============================================================
+class MIO_OT_scale_room(Operator):
+    bl_idname = "mio.scale_room"
+    bl_label = "Scale Room"
+    bl_description = "Scale the existing room to match updated dimensions"
+
+    def execute(self, context):
+        props = context.scene.mio_room_props
+        room = bpy.data.objects.get("Room")
+
+        if not room:
+            self.report({"WARNING"}, "No room found. Please spawn one first.")
+            return {"CANCELLED"}
+
+        room.scale = (
+            props.room_length / 4.0,
+            props.room_width / 3.0,
+            props.room_height / 2.5,
+        )
+
+        self.report({"INFO"}, "Room scaled successfully.")
+        return {"FINISHED"}
+
+
+# ============================================================
+# Update Colors Live Operator
+# ============================================================
+class MIO_OT_update_room_colors(Operator):
+    bl_idname = "mio.update_room_colors"
+    bl_label = "Apply Room Colors"
+    bl_description = "Update wall and floor colors live"
+
+    def execute(self, context):
+        props = context.scene.mio_room_props
+
+        wall_mat = bpy.data.materials.get("MiO_Wall_Mat")
+        floor_mat = bpy.data.materials.get("MiO_Floor_Mat")
+
+        if wall_mat and wall_mat.node_tree:
+            bsdf = wall_mat.node_tree.nodes.get("Principled BSDF")
+            if bsdf:
+                bsdf.inputs["Base Color"].default_value = props.wall_color
+
+        if floor_mat and floor_mat.node_tree:
+            bsdf = floor_mat.node_tree.nodes.get("Principled BSDF")
+            if bsdf:
+                bsdf.inputs["Base Color"].default_value = props.floor_color
+
+        self.report({'INFO'}, "Colors updated live.")
         return {'FINISHED'}
 
 
-# -----------------------------
-# MiO Panel
-# -----------------------------
-class MIO_PT_main(Panel):
-    """Main UI panel for MiO add-on"""
-    bl_label = "MiO"
-    bl_idname = "MIO_PT_main"
+# ============================================================
+# Reset Room Operator
+# ============================================================
+class MIO_OT_reset_room(Operator):
+    bl_idname = "mio.reset_room"
+    bl_label = "Reset Room"
+    bl_description = "Delete the current room and reset all settings to default"
+
+    def execute(self, context):
+        props = context.scene.mio_room_props
+
+        # Delete the room object
+        room = bpy.data.objects.get("Room")
+        if room:
+            bpy.data.objects.remove(room, do_unlink=True)
+
+        # Delete leftover MiO_ objects
+        for obj in bpy.data.objects:
+            if obj.name.startswith("MiO_"):
+                bpy.data.objects.remove(obj, do_unlink=True)
+
+        # Delete materials
+        for mat_name in ["MiO_Wall_Mat", "MiO_Floor_Mat"]:
+            mat = bpy.data.materials.get(mat_name)
+            if mat:
+                bpy.data.materials.remove(mat, do_unlink=True)
+
+        # Reset all properties
+        props.room_length = 4.0
+        props.room_width = 3.0
+        props.room_height = 2.5
+        props.wall_color = (0.8, 0.8, 0.8, 1.0)
+        props.floor_color = (0.5, 0.4, 0.3, 1.0)
+
+        self.report({'INFO'}, "Room and settings reset.")
+        return {'FINISHED'}
+
+
+# ============================================================
+# Panel UI
+# ============================================================
+class MIO_PT_room_spawner(Panel):
+    bl_label = "Room Spawner"
+    bl_idname = "MIO_PT_room_spawner"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "MiO"
 
     def draw(self, context):
         layout = self.layout
-        props = context.scene.mio_props
+        props = context.scene.mio_room_props
 
-        # Room spawner section
-        layout.label(text="Room Spawner")
-        layout.prop(props, "room_type", text="Room Type")
-        layout.operator("mio.spawn_room", icon="HOME")
+        layout.label(text="Room Dimensions (m):")
+        layout.prop(props, "room_length")
+        layout.prop(props, "room_width")
+        layout.prop(props, "room_height")
+
+        layout.operator("mio.spawn_room", icon="CUBE")
+        layout.operator("mio.scale_room", icon="FULLSCREEN_ENTER")
 
         layout.separator()
-        layout.label(text="Furniture Controls")
+        layout.label(text="Room Colors:")
+        layout.prop(props, "wall_color")
+        layout.prop(props, "floor_color")
+        layout.operator("mio.update_room_colors", icon="COLORSET_01_VEC")
 
-        # Text input for the new furniture model
-        layout.prop(props, "furniture_model", text="New Model Name")
+        layout.separator()
+        layout.operator("mio.reset_room", icon="TRASH")
 
-        # Button to switch selected furniture
-        op = layout.operator(
-            "mio.switch_furniture",
-            text="Switch Selected Furniture",
-            icon="FILE_REFRESH"
-        )
-        # Pass the text property to the operator
-        op.new_model = props.furniture_model
+
+# ============================================================
+# Registration
+# ============================================================
+classes = (
+    MIORoomProperties,
+    MIO_OT_spawn_room,
+    MIO_OT_scale_room,
+    MIO_OT_update_room_colors,
+    MIO_OT_reset_room,
+    MIO_PT_room_spawner,
+)

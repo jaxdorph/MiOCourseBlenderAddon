@@ -1,195 +1,96 @@
+"""
+furniture_switch_module.py
+
+- Property group describing room_type, category, model
+- Model list is populated dynamically by calling loader.list_furniture_models()
+- Switch operator clears MiO_Furniture and appends the chosen .blend
+- UI in MiO tab
+"""
+
 import bpy
-from bpy.props import PointerProperty, EnumProperty, FloatVectorProperty
-from bpy.types import PropertyGroup, Operator, Panel
-from . import furniture_loader
+from bpy.types import Operator, Panel, PropertyGroup
+from bpy.props import EnumProperty
 
 
-# -----------------------------------------------------------------------------
-# PROPERTY GROUP
-# Stores the selected room, category, model, and color for the UI
-# -----------------------------------------------------------------------------
 class MIOFurnitureProperties(PropertyGroup):
-
-    # Dropdown: Room type (bedroom, livingroom, kitchen)
-    def update_room(self, context):
-        self.furniture_category = None
-        self.furniture_model = None
-
-    rooms = [(r, r.capitalize(), "") for r in furniture_loader.FURNITURE_LIBRARY.keys()]
-    furniture_room: EnumProperty(
-        name="Room",
-        description="Select a room",
-        items=rooms,
-        update=update_room
+    room_type: EnumProperty(
+        name="Room Type",
+        items=[
+            ("livingroom", "Living Room", ""),
+            ("bedroom", "Bedroom", ""),
+            ("kitchen", "Kitchen", ""),
+        ],
+        default="livingroom",
     )
 
-    # Dropdown: Furniture category (Sofas, Beds, etc.)
-    def update_category(self, context):
-        self.furniture_model = None
-
-    @property
-    def categories(self):
-        room = self.furniture_room
-        return [(c, c, "") for c in furniture_loader.get_room_categories(room)] if room else []
-
-    furniture_category: EnumProperty(
+    category: EnumProperty(
         name="Category",
-        description="Select furniture category",
-        items=lambda self, context: self.categories,
-        update=update_category
+        items=[
+            ("Sofas", "Sofas", ""),
+            ("Coffee Tables", "Coffee Tables", ""),
+            ("Beds", "Beds", ""),
+            ("Wardrobes", "Wardrobes", ""),
+            ("Kitchen Tables", "Kitchen Tables", ""),
+            ("Kitchen Chairs", "Kitchen Chairs", ""),
+        ],
+        default="Sofas",
     )
 
-    # Dropdown: Specific furniture model
-    @property
-    def models(self):
-        room = self.furniture_room
-        cat = self.furniture_category
-        return [(m, m, "") for m in furniture_loader.get_models_for_category(room, cat)] if room and cat else []
-
-    furniture_model: EnumProperty(
+    model: EnumProperty(
         name="Model",
-        description="Select specific furniture model",
-        items=lambda self, context: self.models
+        description="Choose a .blend model to append",
+        items=lambda self, context: MIOFurnitureProperties._get_model_items(self, context)
     )
 
-    # Color picker for tinting furniture
-    color: FloatVectorProperty(
-        name="Color",
-        description="Change furniture color (tints original materials)",
-        subtype='COLOR',
-        default=(1.0, 1.0, 1.0),
-        min=0.0,
-        max=1.0
-    )
+    @staticmethod
+    def _get_model_items(self, context):
+        # Import loader locally to avoid circular import during module load
+        try:
+            from . import furniture_loader_module
+        except Exception as e:
+            print(f"[MiO] loader import error: {e}")
+            return [("NONE", "Loader error", "")]
+        files = furniture_loader_module.list_furniture_models(self.room_type, self.category)
+        if not files:
+            return [("NONE", "No models found", "")]
+        return [(f, f.replace(".blend", ""), "") for f in files]
 
 
-# -----------------------------------------------------------------------------
-# OPERATOR: Spawn selected furniture model
-# -----------------------------------------------------------------------------
-class MIO_OT_spawn_furniture(Operator):
-    bl_idname = "mio.spawn_furniture"
-    bl_label = "Spawn Furniture"
-    bl_description = "Spawn the selected furniture model into the scene"
-
-    def execute(self, context):
-        props = context.scene.mio_furniture_props
-
-        # Ensure a selection is made
-        if not (props.furniture_room and props.furniture_category and props.furniture_model):
-            self.report({'ERROR'}, "Please select Room, Category, and Model")
-            return {'CANCELLED'}
-
-        # Load the furniture via loader module
-        obj = furniture_loader.load_furniture_asset(
-            room_type=props.furniture_room,
-            category=props.furniture_category,
-            model_name=props.furniture_model
-        )
-
-        if obj is None:
-            self.report({'ERROR'}, "Failed to load furniture")
-            return {'CANCELLED'}
-
-        context.view_layer.objects.active = obj
-
-        # Apply color if user has set one
-        if props.color != (1.0, 1.0, 1.0):
-            bpy.ops.mio.set_furniture_color()
-
-        return {'FINISHED'}
-
-
-# -----------------------------------------------------------------------------
-# OPERATOR: Switch selected furniture to a different model
-# -----------------------------------------------------------------------------
 class MIO_OT_switch_furniture(Operator):
     bl_idname = "mio.switch_furniture"
-    bl_label = "Switch Selected Furniture"
-    bl_description = "Replace the selected furniture with another model of the same category"
+    bl_label = "Switch Furniture"
+    bl_description = "Replace currently spawned furniture with the selected model"
 
     def execute(self, context):
         props = context.scene.mio_furniture_props
-        obj = context.active_object
 
-        if obj is None:
-            self.report({'ERROR'}, "No object selected")
-            return {'CANCELLED'}
+        if props.model == "NONE":
+            self.report({"WARNING"}, "No model selected")
+            return {"CANCELLED"}
 
-        # Save old object's transform
-        loc = obj.location.copy()
-        rot = obj.rotation_euler.copy()
-        scale = obj.scale.copy()
+        # local import
+        try:
+            from . import furniture_loader_module
+        except Exception as e:
+            self.report({"ERROR"}, f"Loader import failed: {e}")
+            return {"CANCELLED"}
 
-        # Remove old object
-        bpy.data.objects.remove(obj, do_unlink=True)
+        # clear prior furniture
+        furniture_loader_module.clear_spawned_furniture()
 
-        # Load new model
-        new_obj = furniture_loader.load_furniture_asset(
-            room_type=props.furniture_room,
-            category=props.furniture_category,
-            model_name=props.furniture_model
-        )
+        # append selected model
+        appended = furniture_loader_module.load_furniture_model(props.room_type, props.category, props.model)
+        if not appended:
+            self.report({"ERROR"}, f"Failed to load {props.model}")
+            return {"CANCELLED"}
 
-        if new_obj is None:
-            self.report({'ERROR'}, "Failed to load new furniture")
-            return {'CANCELLED'}
-
-        # Apply old transform
-        new_obj.location = loc
-        new_obj.rotation_euler = rot
-        new_obj.scale = scale
-
-        # Apply color if set
-        if props.color != (1.0, 1.0, 1.0):
-            bpy.ops.mio.set_furniture_color()
-
-        return {'FINISHED'}
+        self.report({"INFO"}, f"Loaded {props.model} ({len(appended)} objects).")
+        return {"FINISHED"}
 
 
-# -----------------------------------------------------------------------------
-# OPERATOR: Apply color to selected furniture
-# Keeps original materials and textures intact
-# -----------------------------------------------------------------------------
-class MIO_OT_set_furniture_color(Operator):
-    bl_idname = "mio.set_furniture_color"
-    bl_label = "Apply Color"
-    bl_description = "Apply selected color to furniture while keeping original materials/textures"
-
-    def execute(self, context):
-        props = context.scene.mio_furniture_props
-        obj = context.active_object
-
-        if obj is None:
-            self.report({'ERROR'}, "No object selected")
-            return {'CANCELLED'}
-
-        # Gather all objects to color
-        objects_to_color = [obj]
-
-        if obj.type == 'EMPTY' and obj.children:
-            objects_to_color = obj.children
-        elif obj.instance_collection:
-            objects_to_color = obj.instance_collection.objects
-
-        # Apply color to all materials of each object
-        for o in objects_to_color:
-            for mat_slot in o.material_slots:
-                mat = mat_slot.material
-                if mat and mat.node_tree:
-                    bsdf = next((n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
-                    if bsdf:
-                        bsdf.inputs['Base Color'].default_value = (*props.color, 1.0)
-
-        self.report({'INFO'}, f"Color applied to {obj.name}")
-        return {'FINISHED'}
-
-
-# -----------------------------------------------------------------------------
-# PANEL: UI in N-panel
-# -----------------------------------------------------------------------------
-class MIO_PT_furniture_panel(Panel):
-    bl_label = "MiO Furniture"
-    bl_idname = "MIO_PT_furniture_panel"
+class MIO_PT_furniture_switcher(Panel):
+    bl_label = "Furniture Switcher"
+    bl_idname = "MIO_PT_furniture_switcher"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "MiO"
@@ -198,47 +99,16 @@ class MIO_PT_furniture_panel(Panel):
         layout = self.layout
         props = context.scene.mio_furniture_props
 
-        layout.label(text="Select Furniture to Spawn or Switch:")
-
-        layout.prop(props, "furniture_room")
-        layout.prop(props, "furniture_category")
-        layout.prop(props, "furniture_model")
-
-        # Spawn button
-        layout.operator("mio.spawn_furniture", icon="ADD")
-
-        # Switch button
+        layout.label(text="Furniture")
+        layout.prop(props, "room_type")
+        layout.prop(props, "category")
+        layout.prop(props, "model")
         layout.operator("mio.switch_furniture", icon="FILE_REFRESH")
 
-        layout.separator()
-        layout.label(text="Optional Color Tint:")
-        layout.prop(props, "color")
-        layout.operator("mio.set_furniture_color", icon="COLOR")
 
-
-# -----------------------------------------------------------------------------
-# REGISTER CLASSES
-# -----------------------------------------------------------------------------
-classes = [
+# helper classes tuple (if you want to register this module alone)
+classes = (
     MIOFurnitureProperties,
-    MIO_OT_spawn_furniture,
     MIO_OT_switch_furniture,
-    MIO_OT_set_furniture_color,
-    MIO_PT_furniture_panel,
-]
-
-
-def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
-    bpy.types.Scene.mio_furniture_props = PointerProperty(type=MIOFurnitureProperties)
-
-
-def unregister():
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
-    del bpy.types.Scene.mio_furniture_props
-
-
-if __name__ == "__main__":
-    register()
+    MIO_PT_furniture_switcher,
+)
